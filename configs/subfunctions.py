@@ -59,7 +59,7 @@ async def object_exists(model, attr_name, attr_value, *args):
     return obj if obj else []
 
 
-async def insert_object(model: object, data: dict, call: CallbackQuery):
+async def insert_object(model: object, data: dict):
     """
     The function accepts 3 arguments:
         1. Class | Model where data is supposed to be inserted to
@@ -142,14 +142,14 @@ async def extract_bishkek_vacancies() -> list:
             return data[:10]
 
 
-async def more_text(call, question_id):
+async def more_text(call):
     '''There is MUST be Docstring'''
     chat_id = call.message.chat.id
 
     async with AsyncSession(engine, expire_on_commit=False) as session:
         async with session.begin():
             vacancy_list = select(BishkekVacancy.header, BishkekVacancy.salary, BishkekVacancy.details, BishkekVacancy.required_experience, BishkekVacancy.schedule, BishkekVacancy.company_name, BishkekVacancy.id).where(
-                BishkekVacancy.id == int(question_id[0])
+                BishkekVacancy.id == int(call.data)
             )
 
             lst = await session.execute(vacancy_list)
@@ -221,14 +221,5 @@ async def questions(call, question_id):
             )
             for item in data
         )
-
-    return data
-
-async def insert_feedback(model, data):
-    request = insert(model).values(data)
-
-    async with AsyncSession(engine) as session:
-        async with session.begin():
-            await session.execute(request)
 
     return data

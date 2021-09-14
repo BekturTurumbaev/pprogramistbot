@@ -172,5 +172,5 @@ if __name__ == "__main__":
     loop = asyncio.get_event_loop()
     while True:
         loop.run_until_complete(filling_database(scraper))
-        time.sleep(3000)
+        time.sleep(1)
 

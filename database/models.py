@@ -324,6 +324,37 @@ class Feedback(BaseModel):
         return f"{self.department} - {self.first_name}"
 
 
+class StudentsList(BaseModel):
+    """
+    Эта модель создана для хранения, учеников курсов.
+    Она содержит поля:
+    chat_id -> Телеграмм ID пользователя
+    first_name -> Имя пользователя
+    last_name -> Фамилия пользователя
+    department_name -> В какой он группе 
+    """
+    __tablename__ = "students_list"
+
+    chat_id = Column(
+        String, nullable=False, comment="Telegram ID of the person himself"
+    )
+
+    first_name = Column(
+        String, nullable=True, comment="Student's first name"
+    )
+
+    last_name = Column(
+        String, nullable=True, comment="Student's last name"
+    )
+
+    department_name = Column(
+        String, nullable=True, comment="Student's department name"
+    )
+
+    def __repr__(self):
+        return f"{self.first_name} - {self.chat_id}"
+
+
 class TestQuestions(BaseModel):
     """
     Эта модель создана для хранения вопросов.

@@ -31,3 +31,5 @@ class BotStates(StatesGroup):
 
     start_test = State()
     choose_answer = State()
+
+    update_db = State()

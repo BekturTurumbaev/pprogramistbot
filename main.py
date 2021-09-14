@@ -1,4 +1,5 @@
 # Standard library imports
+import os
 from datetime import datetime, timedelta
 
 # Third party imports
@@ -10,6 +11,12 @@ from aiogram.types import Message, CallbackQuery, ParseMode, message
 import asyncio
 from asyncio.tasks import sleep
 import uvloop
+
+# Telethon
+import telethon
+from telethon.sync import TelegramClient
+from telethon.tl.functions.messages import GetDialogsRequest
+from telethon.tl.types import InputPeerEmpty
 
 # SQL Alchemy
 from sqlalchemy import exc, update, insert
@@ -40,6 +47,7 @@ from database.models import (
     Vacancy,
     VacancyApplicants,
     TestQuestions,
+    StudentsList,
 )
 
 student_vr = ('1624089338')
@@ -548,7 +556,7 @@ async def vacancy_more(call: CallbackQuery):
         return await states.BotStates.main_menu.set()
 
     else:
-        vacancies_more = await subfunctions.more_text(call, call.data)
+        vacancies_more = await subfunctions.more_text(call)
         [(await call.message.edit_text(text=f"""
     💻 Должность:  {text[0]}\n
     🕴 Работодатель: {text[5]}\n
@@ -792,11 +800,11 @@ async def feedback_text(message: Message):
         "department_id": data_in_tables[1],
         "groups": data_in_tables[2],
         "first_name": data_in_tables[3],
-        "last_name": data_in_tables[4] if data_in_tables[4] else '',
+        "last_name": data_in_tables[4] if data_in_tables[4] else 'Empty',
         "feedback_text": data_in_tables[5],
     }
 
-    await subfunctions.insert_feedback(Feedback, data)
+    await subfunctions.insert_object(Feedback, data)
 
     await message.answer(
         text=f'{constants.SPEECH["feedback_answer" + lang]} \n{constants.SPEECH["main_menu" + lang]}',
@@ -900,5 +908,147 @@ async def check_questions(call: CallbackQuery):
 ######################## END TESTS #########################
 ############################################################
 
+
+############################################################
+######################### SCRAPING #########################
+############################################################
+
+
+@dp.message_handler(commands=["update"], state="*")
+async def update_db(message: Message):
+    if message.text == '/update':
+        client = TelegramClient(constants.PHONE, constants.API_ID, constants.API_HASH)
+        await client.connect()
+        if not await client.is_user_authorized():
+            await client.send_code_request(constants.PHONE)
+
+        await message.answer(
+            text='Введите код отправленный вам в ТГ',
+            parse_mode=ParseMode.MARKDOWN,
+        )
+    if message.chat.id in constants.SUPERUSERS:
+        if f"{constants.PHONE}.session" in os.listdir():
+            os.remove(f"{constants.PHONE}.session")
+
+        try:
+            client = TelegramClient(constants.PHONE, constants.API_ID, constants.API_HASH)
+
+            await client.connect()
+            await client.sign_in(constants.PHONE, message.text)
+
+            chats = []
+            last_date = None
+            chunk_size = 1000
+            groups=[]
+            
+            result = await client(GetDialogsRequest(
+                    offset_date=last_date,
+                    offset_id=0,
+                    offset_peer=InputPeerEmpty(),
+                    limit=chunk_size,
+                    hash = 0
+                ))
+            chats.extend(result.chats)
+            
+            for chat in chats:
+                try:
+                    if chat.megagroup == True:
+                        groups.append(chat)
+                except:
+                    continue
+
+            cycle = []
+
+            for g in groups:
+                if 'PYTHON' in g.title.upper() or 'JAVASCRIPT' in g.title.upper():
+                    cycle.append(g.title)
+            
+            for g_index in range(len(cycle)):
+                target_group=groups[int(g_index)]
+
+                all_participants = []
+                all_participants = await client.get_participants(target_group, aggressive=True)
+
+                for user in all_participants:
+                    data = {
+                        "chat_id": user.id,
+                        "first_name": user.first_name,
+                        "last_name": user.last_name if user.last_name else 'Empty',
+                        "department_name": target_group.title,
+                    }
+
+                    await subfunctions.insert_object(Feedback, data)
+        except telethon.errors.rpcerrorlist.PhoneCodeInvalidError:
+            await message.answer(
+                text='Введите код повторно!',
+                parse_mode=ParseMode.MARKDOWN,
+            )
+            return await states.BotStates.update_db.set()
+
+
+@dp.message_handler(content_types=["text"], state=states.BotStates.update_db)
+async def check_update(message: Message):
+    
+    try:
+        client = TelegramClient(constants.PHONE, constants.API_ID, constants.API_HASH)
+        await client.connect()
+        await client.sign_in(constants.PHONE, message.text).checking
+        
+        chats = []
+        last_date = None
+        chunk_size = 1000
+        groups=[]
+        
+        result = await client(GetDialogsRequest(
+                offset_date=last_date,
+                offset_id=0,
+                offset_peer=InputPeerEmpty(),
+                limit=chunk_size,
+                hash = 0
+            ))
+        chats.extend(result.chats)
+        
+        for chat in chats:
+            try:
+                if chat.megagroup == True:
+                    groups.append(chat)
+            except:
+                continue
+
+        cycle = []
+
+        for g in groups:
+            if 'PYTHON' in g.title.upper() or 'JAVASCRIPT' in g.title.upper():
+                cycle.append(g.title)
+        
+        for g_index in range(len(cycle)):
+            target_group=groups[int(g_index)]
+
+            all_participants = []
+            all_participants = await client.get_participants(target_group, aggressive=True)
+
+            for user in all_participants:
+                data = {
+                    "chat_id": user.id,
+                    "first_name": user.first_name,
+                    "last_name": user.last_name if user.last_name else 'Empty',
+                    "department_name": target_group.title,
+                }
+
+                await subfunctions.insert_object(Feedback, data)
+    except telethon.errors.rpcerrorlist.PhoneCodeInvalidError:
+        await message.answer(
+            text='print2',
+            parse_mode=ParseMode.MARKDOWN,
+        )
+        return await states.BotStates.update_db.set()
+
+
+############################################################
+######################## END SCRAP #########################
+############################################################
+
+
 if __name__ == "__main__":
     executor.start_polling(dispatcher=dp, loop=loop)
+ 
